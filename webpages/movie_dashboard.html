@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Top 200 Blockbusters Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --panel: #16161a;
+    --border: #2a2a30;
+    --text: #e6e6e6;
+    --muted: #888;
+    --gold: #f5c518;
+    --red: #e23636;
+    --grey: #5a5a60;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+    padding: 24px;
+    border-bottom: 1px solid var(--border);
+  }
+  h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin: 0 0 8px 0;
+    letter-spacing: 0.5px;
+  }
+  h1 .gold { color: var(--gold); }
+  h1 .red { color: var(--red); }
+  .subtitle {
+    color: var(--muted);
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+  .panel-title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 4px 0;
+  }
+  .panel-subtitle {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 20px;
+  }
+  .panel-subtitle .gold { color: var(--gold); }
+  .panel-subtitle .red { color: var(--red); }
+  .controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    align-items: center;
+    margin-bottom: 24px;
+    padding: 16px;
+    background: #0d0d10;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+  }
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .control-group label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  select {
+    background: #1a1a20;
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 12px;
+    font-size: 14px;
+    cursor: pointer;
+    min-width: 160px;
+  }
+  select:hover { border-color: var(--gold); }
+  .export-btn {
+    background: linear-gradient(180deg, #1a1a20 0%, #0d0d10 100%);
+    color: var(--gold);
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    letter-spacing: 0.5px;
+    transition: all 0.15s;
+    margin-top: 14px;
+  }
+  .export-btn:hover {
+    background: var(--gold);
+    color: #1a1a20;
+  }
+  .export-btn:active { transform: translateY(1px); }
+  .export-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+  .summary {
+    margin-left: auto;
+    font-size: 13px;
+    color: var(--muted);
+  }
+  .summary strong { color: var(--gold); font-size: 15px; }
+  .tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(20, 20, 24, 0.97);
+    border: 1px solid var(--gold);
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 12px;
+    line-height: 1.6;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    z-index: 100;
+    opacity: 0;
+    transition: opacity 0.15s;
+    max-width: 280px;
+  }
+  .tooltip .title { font-weight: 700; color: var(--gold); margin-bottom: 4px; font-size: 13px; }
+  .tooltip .row { display: flex; justify-content: space-between; gap: 16px; }
+  .tooltip .row .label { color: var(--muted); }
+  .tooltip .yellow-text { color: var(--gold); }
+  .tooltip .red-text { color: var(--red); }
+  svg { display: block; }
+  .axis text { fill: var(--muted); font-size: 11px; }
+  .axis path, .axis line { stroke: #2a2a30; }
+  .axis .domain { stroke: #3a3a40; }
+  .gridline { stroke: #1f1f25; stroke-dasharray: 2,2; }
+  .movie-dash { stroke: var(--grey); stroke-width: 1; opacity: 0.6; }
+  .movie-dash.hover { stroke: var(--text); stroke-width: 2; opacity: 1; }
+  .theatrical-dot { fill: var(--gold); stroke: none; }
+  .digital-dot { fill: var(--red); stroke: none; }
+  .legend {
+    display: flex;
+    gap: 24px;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--muted);
+    justify-content: center;
+  }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .legend-line { width: 24px; height: 2px; }
+  .bar-imdb { fill: var(--gold); }
+  .bar-rt { fill: var(--red); }
+  .bar-row text { fill: var(--text); font-size: 11px; }
+  .bar-row .value-label { fill: var(--text); font-size: 10px; font-weight: 600; }
+  .avg-line { stroke: #fff; stroke-width: 1.5; stroke-dasharray: 4,3; }
+  .avg-label { fill: #fff; font-size: 10px; font-weight: 600; }
+  .center-line { stroke: #3a3a40; stroke-width: 1; }
+  .empty-state {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-style: italic;
+  }
+  .scrollable {
+    max-height: 700px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+  .scrollable::-webkit-scrollbar { width: 8px; }
+  .scrollable::-webkit-scrollbar-track { background: var(--bg); }
+  .scrollable::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  .scrollable::-webkit-scrollbar-thumb:hover { background: var(--grey); }
+  .footer {
+    text-align: center;
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 32px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Top 200 Blockbusters: <span class="gold">Does</span> Who Leads the Movie <span class="red">Matter?</span></h1>
+  <div class="subtitle">Box Office · Release Windows · Audience vs Critics — 2015 to 2026</div>
+</div>
+
+<div class="panel">
+  <h2 class="panel-title">Release Window & Box Office Performance</h2>
+  <p class="panel-subtitle">
+    Each dash represents a movie's release window —
+    <span class="gold">● theatrical release</span> &nbsp;→&nbsp;
+    <span class="red">● digital release</span>.
+    Hover for details.
+  </p>
+  <div id="scatter"></div>
+</div>
+
+<div class="panel">
+  <h2 class="panel-title">Audience vs Critics: Diverging Reviews</h2>
+  <p class="panel-subtitle">
+    <span class="gold">IMDB audience scores</span> (left, ×10) vs <span class="red">Rotten Tomatoes critic scores</span> (right).
+    Filter by demographics. Dashed lines show category averages.
+  </p>
+
+  <div class="controls">
+    <div class="control-group">
+      <label>Lead Gender</label>
+      <select id="filter-gender">
+        <option value="All">All</option>
+        <option value="Male">Male</option>
+        <option value="Female">Female</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label>Lead Ethnicity</label>
+      <select id="filter-ethnicity">
+        <option value="All">All</option>
+        <option value="White">White</option>
+        <option value="Non-White">Non-White (combined)</option>
+        <option value="Asian">Asian</option>
+        <option value="Black">Black</option>
+        <option value="MENA">MENA</option>
+        <option value="PI">Pacific Islander</option>
+        <option value="Indian">Indian</option>
+        <option value="Mixed">Mixed</option>
+        <option value="Other">Other</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label>Genre</label>
+      <select id="filter-genre">
+        <option value="All">All</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label>Show top</label>
+      <select id="filter-top">
+        <option value="20">Top 20</option>
+        <option value="30">Top 30</option>
+        <option value="50">Top 50</option>
+        <option value="100">Top 100</option>
+        <option value="999">All</option>
+      </select>
+    </div>
+    <button class="export-btn" id="export-btn" title="Download current view as PNG">⬇ Export PNG</button>
+    <div class="summary" id="summary"></div>
+  </div>
+
+  <div class="scrollable">
+    <div id="diverging"></div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<div class="footer">
+  Data: top 200 movies by global box office, 2015–2026 · manually compiled from BoxOfficeMojo, The-Numbers, IMDb, Rotten Tomatoes
+</div>
+
+<script>
+// ============ DATA ============
+const DATA = [{"Rank": 1, "Movie Title": "Avengers: Endgame", "Gross (M USD)": 2799.4, "Theatrical": "04/26/2019", "Digital": "07/30/2019", "Window": 95, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 94.0, "RT Public": 90.0, "IMDB": 8.4}, {"Rank": 2, "Movie Title": "Avatar: The Way of Water", "Gross (M USD)": 2343.4, "Theatrical": "12/16/2022", "Digital": "03/28/2023", "Window": 102, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 76.0, "RT Public": 92.0, "IMDB": 7.5}, {"Rank": 3, "Movie Title": "Ne Zha 2", "Gross (M USD)": 2215.6, "Theatrical": "01/29/2025", "Digital": "09/16/2025", "Window": 230, "Genre": "Animation", "Country": "China", "Release Company": "Huaxia", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 92.0, "RT Public": 94.0, "IMDB": 8.1}, {"Rank": 4, "Movie Title": "Star Wars: Force Awakens", "Gross (M USD)": 2071.3, "Theatrical": "12/18/2015", "Digital": "04/01/2016", "Window": 105, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 93.0, "RT Public": 85.0, "IMDB": 7.8}, {"Rank": 5, "Movie Title": "Avengers: Infinity War", "Gross (M USD)": 2052.4, "Theatrical": "04/27/2018", "Digital": "07/31/2018", "Window": 95, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 85.0, "RT Public": 92.0, "IMDB": 8.4}, {"Rank": 6, "Movie Title": "Spider-Man: No Way Home", "Gross (M USD)": 1975.8, "Theatrical": "12/17/2021", "Digital": "03/15/2022", "Window": 88, "Genre": "Action", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 93.0, "RT Public": 98.0, "IMDB": 8.2}, {"Rank": 7, "Movie Title": "Inside Out 2", "Gross (M USD)": 1698.8, "Theatrical": "06/14/2024", "Digital": "08/20/2024", "Window": 67, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Other", "RT Critic": 91.0, "RT Public": 96.0, "IMDB": 7.7}, {"Rank": 8, "Movie Title": "Jurassic World", "Gross (M USD)": 1671.5, "Theatrical": "06/12/2015", "Digital": "10/01/2015", "Window": 111, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 71.0, "RT Public": 78.0, "IMDB": 6.9}, {"Rank": 9, "Movie Title": "The Lion King (2019)", "Gross (M USD)": 1662.0, "Theatrical": "07/19/2019", "Digital": "10/11/2019", "Window": 84, "Genre": "Adventure", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 52.0, "RT Public": 88.0, "IMDB": 6.8}, {"Rank": 10, "Movie Title": "Furious 7", "Gross (M USD)": 1515.3, "Theatrical": "04/03/2015", "Digital": "07/06/2015", "Window": 94, "Genre": "Action", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 81.0, "RT Public": 82.0, "IMDB": 7.1}, {"Rank": 11, "Movie Title": "Top Gun: Maverick", "Gross (M USD)": 1495.6, "Theatrical": "05/27/2022", "Digital": "08/23/2022", "Window": 88, "Genre": "Action", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 96.0, "RT Public": 99.0, "IMDB": 8.3}, {"Rank": 12, "Movie Title": "Frozen II", "Gross (M USD)": 1453.6, "Theatrical": "11/22/2019", "Digital": "02/11/2020", "Window": 81, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Other", "RT Critic": 77.0, "RT Public": 92.0, "IMDB": 6.8}, {"Rank": 13, "Movie Title": "Barbie", "Gross (M USD)": 1447.1, "Theatrical": "07/21/2023", "Digital": "09/12/2023", "Window": 53, "Genre": "Comedy", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 88.0, "RT Public": 83.0, "IMDB": 6.9}, {"Rank": 14, "Movie Title": "Avengers: Age of Ultron", "Gross (M USD)": 1405.0, "Theatrical": "05/01/2015", "Digital": "09/08/2015", "Window": 130, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 76.0, "RT Public": 82.0, "IMDB": 7.3}, {"Rank": 15, "Movie Title": "Super Mario Bros. Movie", "Gross (M USD)": 1360.8, "Theatrical": "04/05/2023", "Digital": "05/16/2023", "Window": 41, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 59.0, "RT Public": 95.0, "IMDB": 7.0}, {"Rank": 16, "Movie Title": "Black Panther", "Gross (M USD)": 1349.9, "Theatrical": "02/16/2018", "Digital": "05/08/2018", "Window": 81, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Black", "RT Critic": 96.0, "RT Public": 79.0, "IMDB": 7.3}, {"Rank": 17, "Movie Title": "Deadpool & Wolverine", "Gross (M USD)": 1338.0, "Theatrical": "07/26/2024", "Digital": "10/01/2024", "Window": 67, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 78.0, "RT Public": 94.0, "IMDB": 7.8}, {"Rank": 18, "Movie Title": "Star Wars: The Last Jedi", "Gross (M USD)": 1334.4, "Theatrical": "12/15/2017", "Digital": "03/13/2018", "Window": 88, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 91.0, "RT Public": 42.0, "IMDB": 6.9}, {"Rank": 19, "Movie Title": "JW: Fallen Kingdom", "Gross (M USD)": 1310.4, "Theatrical": "06/22/2018", "Digital": "09/04/2018", "Window": 74, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 46.0, "RT Public": 48.0, "IMDB": 6.1}, {"Rank": 20, "Movie Title": "Beauty and the Beast", "Gross (M USD)": 1266.1, "Theatrical": "03/17/2017", "Digital": "05/30/2017", "Window": 74, "Genre": "Fantasy", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 71.0, "RT Public": 80.0, "IMDB": 7.1}, {"Rank": 21, "Movie Title": "Incredibles 2", "Gross (M USD)": 1243.2, "Theatrical": "06/15/2018", "Digital": "10/23/2018", "Window": 130, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 93.0, "RT Public": 84.0, "IMDB": 7.6}, {"Rank": 22, "Movie Title": "Fate of the Furious", "Gross (M USD)": 1236.0, "Theatrical": "04/14/2017", "Digital": "06/27/2017", "Window": 74, "Genre": "Action", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 67.0, "RT Public": 72.0, "IMDB": 6.6}, {"Rank": 23, "Movie Title": "Minions", "Gross (M USD)": 1159.4, "Theatrical": "07/10/2015", "Digital": "10/27/2015", "Window": 109, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 55.0, "RT Public": 49.0, "IMDB": 6.4}, {"Rank": 24, "Movie Title": "Capt. America: Civil War", "Gross (M USD)": 1155.0, "Theatrical": "05/06/2016", "Digital": "09/02/2016", "Window": 119, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 90.0, "RT Public": 89.0, "IMDB": 7.8}, {"Rank": 25, "Movie Title": "Aquaman", "Gross (M USD)": 1152.0, "Theatrical": "12/21/2018", "Digital": "03/05/2019", "Window": 74, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "PI", "RT Critic": 65.0, "RT Public": 72.0, "IMDB": 6.8}, {"Rank": 26, "Movie Title": "Zootopia 2", "Gross (M USD)": 1151.2, "Theatrical": "11/26/2025", "Digital": "01/20/2026", "Window": 55, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Other", "RT Critic": 89.0, "RT Public": 93.0, "IMDB": 7.8}, {"Rank": 27, "Movie Title": "SM: Far From Home", "Gross (M USD)": 1132.7, "Theatrical": "07/02/2019", "Digital": "09/17/2019", "Window": 77, "Genre": "Action", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 90.0, "RT Public": 95.0, "IMDB": 7.4}, {"Rank": 28, "Movie Title": "Captain Marvel", "Gross (M USD)": 1131.4, "Theatrical": "03/08/2019", "Digital": "05/28/2019", "Window": 81, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 79.0, "RT Public": 45.0, "IMDB": 6.8}, {"Rank": 29, "Movie Title": "Joker", "Gross (M USD)": 1078.9, "Theatrical": "10/04/2019", "Digital": "12/17/2019", "Window": 74, "Genre": "Crime", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 69.0, "RT Public": 88.0, "IMDB": 8.4}, {"Rank": 30, "Movie Title": "SW: Rise of Skywalker", "Gross (M USD)": 1077.0, "Theatrical": "12/20/2019", "Digital": "03/17/2020", "Window": 88, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 51.0, "RT Public": 86.0, "IMDB": 6.5}, {"Rank": 31, "Movie Title": "Toy Story 4", "Gross (M USD)": 1073.8, "Theatrical": "06/21/2019", "Digital": "10/01/2019", "Window": 102, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 97.0, "RT Public": 94.0, "IMDB": 7.7}, {"Rank": 32, "Movie Title": "Moana 2", "Gross (M USD)": 1059.2, "Theatrical": "11/27/2024", "Digital": "01/28/2025", "Window": 62, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Other", "RT Critic": 66.0, "RT Public": 88.0, "IMDB": 6.9}, {"Rank": 33, "Movie Title": "Rogue One: Star Wars", "Gross (M USD)": 1058.6, "Theatrical": "12/16/2016", "Digital": "03/24/2017", "Window": 98, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 84.0, "RT Public": 87.0, "IMDB": 7.8}, {"Rank": 34, "Movie Title": "Aladdin (2019)", "Gross (M USD)": 1054.3, "Theatrical": "05/24/2019", "Digital": "08/27/2019", "Window": 95, "Genre": "Fantasy", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "MENA", "RT Critic": 57.0, "RT Public": 94.0, "IMDB": 6.9}, {"Rank": 35, "Movie Title": "Zootopia", "Gross (M USD)": 1043.7, "Theatrical": "03/04/2016", "Digital": "06/07/2016", "Window": 95, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Other", "RT Critic": 98.0, "RT Public": 92.0, "IMDB": 8.0}, {"Rank": 36, "Movie Title": "Lilo & Stitch (2025)", "Gross (M USD)": 1038.0, "Theatrical": "05/23/2025", "Digital": "07/15/2025", "Window": 53, "Genre": "Fantasy", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "PI", "RT Critic": 74.0, "RT Public": 89.0, "IMDB": 7.1}, {"Rank": 37, "Movie Title": "Despicable Me 3", "Gross (M USD)": 1034.8, "Theatrical": "06/30/2017", "Digital": "10/03/2017", "Window": 95, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 59.0, "RT Public": 53.0, "IMDB": 6.2}, {"Rank": 38, "Movie Title": "Finding Dory", "Gross (M USD)": 1029.2, "Theatrical": "06/17/2016", "Digital": "10/25/2016", "Window": 130, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Other", "RT Critic": 94.0, "RT Public": 84.0, "IMDB": 7.3}, {"Rank": 39, "Movie Title": "Jurassic World Dominion", "Gross (M USD)": 1001.9, "Theatrical": "06/10/2022", "Digital": "07/15/2022", "Window": 35, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 29.0, "RT Public": 77.0, "IMDB": 5.6}, {"Rank": 40, "Movie Title": "Oppenheimer", "Gross (M USD)": 975.8, "Theatrical": "07/21/2023", "Digital": "11/21/2023", "Window": 123, "Genre": "Biography", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 93.0, "RT Public": 91.0, "IMDB": 8.4}, {"Rank": 41, "Movie Title": "Despicable Me 4", "Gross (M USD)": 972.1, "Theatrical": "07/03/2024", "Digital": "08/06/2024", "Window": 34, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 56.0, "RT Public": 88.0, "IMDB": 6.2}, {"Rank": 42, "Movie Title": "The Jungle Book", "Gross (M USD)": 966.5, "Theatrical": "04/15/2016", "Digital": "08/23/2016", "Window": 130, "Genre": "Adventure", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Indian", "RT Critic": 94.0, "RT Public": 86.0, "IMDB": 7.4}, {"Rank": 43, "Movie Title": "Jumanji: Welcome Jungle", "Gross (M USD)": 962.5, "Theatrical": "12/20/2017", "Digital": "03/06/2018", "Window": 76, "Genre": "Adventure", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 76.0, "RT Public": 87.0, "IMDB": 7.0}, {"Rank": 44, "Movie Title": "A Minecraft Movie", "Gross (M USD)": 958.1, "Theatrical": "04/04/2025", "Digital": "06/10/2025", "Window": 67, "Genre": "Adventure", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 48.0, "RT Public": 87.0, "IMDB": 6.2}, {"Rank": 45, "Movie Title": "Doctor Strange 2", "Gross (M USD)": 955.7, "Theatrical": "05/06/2022", "Digital": "06/22/2022", "Window": 47, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 74.0, "RT Public": 85.0, "IMDB": 6.9}, {"Rank": 46, "Movie Title": "Minions: Rise of Gru", "Gross (M USD)": 940.2, "Theatrical": "07/01/2022", "Digital": "08/02/2022", "Window": 32, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 70.0, "RT Public": 89.0, "IMDB": 6.6}, {"Rank": 47, "Movie Title": "Battle at Lake Changjin", "Gross (M USD)": 913.0, "Theatrical": "09/30/2021", "Digital": "12/01/2021", "Window": 62, "Genre": "War", "Country": "China", "Release Company": "Bona Film", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 36.0, "RT Public": 65.0, "IMDB": 5.5}, {"Rank": 48, "Movie Title": "Bohemian Rhapsody", "Gross (M USD)": 910.8, "Theatrical": "11/02/2018", "Digital": "01/22/2019", "Window": 81, "Genre": "Biography", "Country": "UK", "Release Company": "20th Century", "Lead Gender": "Male", "Lead Ethnicity": "MENA", "RT Critic": 60.0, "RT Public": 85.0, "IMDB": 7.9}, {"Rank": 49, "Movie Title": "Spider-Man: Homecoming", "Gross (M USD)": 880.1, "Theatrical": "07/07/2017", "Digital": "09/26/2017", "Window": 81, "Genre": "Action", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 92.0, "RT Public": 88.0, "IMDB": 7.4}, {"Rank": 50, "Movie Title": "Spectre", "Gross (M USD)": 880.0, "Theatrical": "11/06/2015", "Digital": "01/22/2016", "Window": 77, "Genre": "Action", "Country": "UK", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 63.0, "RT Public": 61.0, "IMDB": 6.8}, {"Rank": 51, "Movie Title": "Secret Life of Pets", "Gross (M USD)": 875.4, "Theatrical": "07/08/2016", "Digital": "11/22/2016", "Window": 137, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 72.0, "RT Public": 63.0, "IMDB": 6.5}, {"Rank": 52, "Movie Title": "Batman v Superman", "Gross (M USD)": 873.6, "Theatrical": "03/25/2016", "Digital": "06/28/2016", "Window": 95, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 29.0, "RT Public": 63.0, "IMDB": 6.5}, {"Rank": 53, "Movie Title": "Wolf Warrior 2", "Gross (M USD)": 870.3, "Theatrical": "07/27/2017", "Digital": "11/10/2017", "Window": 106, "Genre": "Action", "Country": "China", "Release Company": "United Ent", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 69.0, "RT Public": 86.0, "IMDB": 5.9}, {"Rank": 54, "Movie Title": "Jurassic World: Rebirth", "Gross (M USD)": 869.1, "Theatrical": "07/02/2025", "Digital": "08/26/2025", "Window": 55, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 61.0, "RT Public": 79.0, "IMDB": 6.5}, {"Rank": 55, "Movie Title": "Guardians of Galaxy 2", "Gross (M USD)": 863.7, "Theatrical": "05/05/2017", "Digital": "08/08/2017", "Window": 95, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 85.0, "RT Public": 87.0, "IMDB": 7.6}, {"Rank": 56, "Movie Title": "Wakanda Forever", "Gross (M USD)": 859.2, "Theatrical": "11/11/2022", "Digital": "02/01/2023", "Window": 82, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Black", "RT Critic": 84.0, "RT Public": 94.0, "IMDB": 6.7}, {"Rank": 57, "Movie Title": "Inside Out", "Gross (M USD)": 858.8, "Theatrical": "06/19/2015", "Digital": "10/13/2015", "Window": 116, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Other", "RT Critic": 98.0, "RT Public": 89.0, "IMDB": 8.1}, {"Rank": 58, "Movie Title": "Venom", "Gross (M USD)": 856.0, "Theatrical": "10/05/2018", "Digital": "12/11/2018", "Window": 67, "Genre": "Action", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 30.0, "RT Public": 80.0, "IMDB": 6.6}, {"Rank": 59, "Movie Title": "Thor: Ragnarok", "Gross (M USD)": 853.9, "Theatrical": "11/03/2017", "Digital": "02/20/2018", "Window": 109, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 93.0, "RT Public": 87.0, "IMDB": 7.9}, {"Rank": 60, "Movie Title": "Guardians of Galaxy 3", "Gross (M USD)": 845.5, "Theatrical": "05/05/2023", "Digital": "07/07/2023", "Window": 63, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 82.0, "RT Public": 94.0, "IMDB": 7.9}, {"Rank": 61, "Movie Title": "Hi, Mom", "Gross (M USD)": 841.6, "Theatrical": "02/12/2021", "Digital": "05/01/2021", "Window": 78, "Genre": "Comedy", "Country": "China", "Release Company": "Lianrui", "Lead Gender": "Female", "Lead Ethnicity": "Asian", "RT Critic": 92.0, "RT Public": 85.0, "IMDB": 7.0}, {"Rank": 62, "Movie Title": "Wonder Woman", "Gross (M USD)": 822.8, "Theatrical": "06/02/2017", "Digital": "08/29/2017", "Window": 88, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 93.0, "RT Public": 83.0, "IMDB": 7.4}, {"Rank": 63, "Movie Title": "Coco", "Gross (M USD)": 807.8, "Theatrical": "11/22/2017", "Digital": "02/13/2018", "Window": 83, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 97.0, "RT Public": 94.0, "IMDB": 8.4}, {"Rank": 64, "Movie Title": "Demon Slayer: Castle", "Gross (M USD)": 794.2, "Theatrical": "03/14/2025", "Digital": "05/06/2025", "Window": 53, "Genre": "Animation", "Country": "Japan", "Release Company": "Crunchyroll", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 95.0, "RT Public": 98.0, "IMDB": 8.5}, {"Rank": 65, "Movie Title": "Pirates of Caribbean 5", "Gross (M USD)": 794.1, "Theatrical": "05/26/2017", "Digital": "09/19/2017", "Window": 116, "Genre": "Adventure", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 30.0, "RT Public": 61.0, "IMDB": 6.5}, {"Rank": 66, "Movie Title": "M:I - Fallout", "Gross (M USD)": 791.1, "Theatrical": "07/27/2018", "Digital": "11/20/2018", "Window": 116, "Genre": "Action", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 97.0, "RT Public": 88.0, "IMDB": 7.7}, {"Rank": 67, "Movie Title": "Deadpool 2", "Gross (M USD)": 785.8, "Theatrical": "05/18/2018", "Digital": "08/07/2018", "Window": 81, "Genre": "Action", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 84.0, "RT Public": 85.0, "IMDB": 7.7}, {"Rank": 68, "Movie Title": "No Time to Die", "Gross (M USD)": 774.1, "Theatrical": "10/08/2021", "Digital": "11/09/2021", "Window": 32, "Genre": "Action", "Country": "UK", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 83.0, "RT Public": 88.0, "IMDB": 7.3}, {"Rank": 69, "Movie Title": "The Batman", "Gross (M USD)": 772.2, "Theatrical": "03/04/2022", "Digital": "04/18/2022", "Window": 45, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 85.0, "RT Public": 87.0, "IMDB": 7.8}, {"Rank": 70, "Movie Title": "Thor: Love and Thunder", "Gross (M USD)": 760.9, "Theatrical": "07/08/2022", "Digital": "09/08/2022", "Window": 62, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 63.0, "RT Public": 76.0, "IMDB": 6.2}, {"Rank": 71, "Movie Title": "Hobbs & Shaw", "Gross (M USD)": 759.0, "Theatrical": "08/02/2019", "Digital": "10/15/2019", "Window": 74, "Genre": "Action", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Mixed", "RT Critic": 67.0, "RT Public": 88.0, "IMDB": 6.5}, {"Rank": 72, "Movie Title": "Wicked", "Gross (M USD)": 752.0, "Theatrical": "11/22/2024", "Digital": "01/14/2025", "Window": 53, "Genre": "Fantasy", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Female", "Lead Ethnicity": "Black", "RT Critic": 90.0, "RT Public": 96.0, "IMDB": 7.8}, {"Rank": 73, "Movie Title": "Suicide Squad", "Gross (M USD)": 746.8, "Theatrical": "08/05/2016", "Digital": "11/15/2016", "Window": 102, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 26.0, "RT Public": 58.0, "IMDB": 5.9}, {"Rank": 74, "Movie Title": "Ne Zha (2019)", "Gross (M USD)": 742.7, "Theatrical": "07/26/2019", "Digital": "10/01/2019", "Window": 67, "Genre": "Animation", "Country": "China", "Release Company": "Coloroom", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 88.0, "RT Public": 98.0, "IMDB": 7.4}, {"Rank": 75, "Movie Title": "F9: The Fast Saga", "Gross (M USD)": 726.2, "Theatrical": "06/25/2021", "Digital": "07/30/2021", "Window": 35, "Genre": "Action", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 59.0, "RT Public": 82.0, "IMDB": 5.2}, {"Rank": 76, "Movie Title": "Mufasa: Lion King", "Gross (M USD)": 722.0, "Theatrical": "12/20/2024", "Digital": "02/11/2025", "Window": 53, "Genre": "Adventure", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 65.0, "RT Public": 82.0, "IMDB": 6.4}, {"Rank": 77, "Movie Title": "Dune: Part Two", "Gross (M USD)": 714.4, "Theatrical": "03/01/2024", "Digital": "04/16/2024", "Window": 46, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 92.0, "RT Public": 95.0, "IMDB": 8.5}, {"Rank": 78, "Movie Title": "Fast X", "Gross (M USD)": 714.4, "Theatrical": "05/19/2023", "Digital": "06/09/2023", "Window": 21, "Genre": "Action", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 56.0, "RT Public": 84.0, "IMDB": 5.8}, {"Rank": 79, "Movie Title": "The Wandering Earth", "Gross (M USD)": 700.0, "Theatrical": "02/05/2019", "Digital": "04/30/2019", "Window": 84, "Genre": "Sci-Fi", "Country": "China", "Release Company": "China Film", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 70.0, "RT Public": 53.0, "IMDB": 5.9}, {"Rank": 80, "Movie Title": "It", "Gross (M USD)": 700.3, "Theatrical": "09/08/2017", "Digital": "12/19/2017", "Window": 102, "Genre": "Horror", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 86.0, "RT Public": 84.0, "IMDB": 7.3}, {"Rank": 81, "Movie Title": "Across Spider-Verse", "Gross (M USD)": 690.5, "Theatrical": "06/02/2023", "Digital": "08/08/2023", "Window": 67, "Genre": "Animation", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "Mixed", "RT Critic": 95.0, "RT Public": 94.0, "IMDB": 8.6}, {"Rank": 82, "Movie Title": "Detective Chinatown 3", "Gross (M USD)": 686.2, "Theatrical": "02/12/2021", "Digital": "04/01/2021", "Window": 48, "Genre": "Comedy", "Country": "China", "Release Company": "Wanda Media", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 60.0, "RT Public": 88.0, "IMDB": 5.5}, {"Rank": 83, "Movie Title": "M:I - Rogue Nation", "Gross (M USD)": 682.7, "Theatrical": "07/31/2015", "Digital": "10/20/2015", "Window": 81, "Genre": "Action", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 94.0, "RT Public": 87.0, "IMDB": 7.4}, {"Rank": 84, "Movie Title": "Doctor Strange", "Gross (M USD)": 677.7, "Theatrical": "11/04/2016", "Digital": "02/14/2017", "Window": 102, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 89.0, "RT Public": 86.0, "IMDB": 7.5}, {"Rank": 85, "Movie Title": "Full River Red", "Gross (M USD)": 673.5, "Theatrical": "01/22/2023", "Digital": "03/01/2023", "Window": 38, "Genre": "Thriller", "Country": "China", "Release Company": "Huanxi", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 92.0, "RT Public": 80.0, "IMDB": 7.1}, {"Rank": 86, "Movie Title": "Justice League", "Gross (M USD)": 657.9, "Theatrical": "11/17/2017", "Digital": "02/13/2018", "Window": 88, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 39.0, "RT Public": 66.0, "IMDB": 6.1}, {"Rank": 87, "Movie Title": "The Martian", "Gross (M USD)": 653.6, "Theatrical": "10/02/2015", "Digital": "12/22/2015", "Window": 81, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 91.0, "RT Public": 91.0, "IMDB": 8.0}, {"Rank": 88, "Movie Title": "HG: Mockingjay 2", "Gross (M USD)": 653.4, "Theatrical": "11/20/2015", "Digital": "03/08/2016", "Window": 109, "Genre": "Action", "Country": "USA", "Release Company": "Lionsgate", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 70.0, "RT Public": 66.0, "IMDB": 6.6}, {"Rank": 89, "Movie Title": "Moana", "Gross (M USD)": 643.3, "Theatrical": "11/23/2016", "Digital": "02/21/2017", "Window": 90, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Other", "RT Critic": 95.0, "RT Public": 89.0, "IMDB": 7.6}, {"Rank": 90, "Movie Title": "HTTYD (Live Action)", "Gross (M USD)": 636.3, "Theatrical": "06/13/2025", "Digital": "08/05/2025", "Window": 53, "Genre": "Adventure", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 75.0, "RT Public": 88.0, "IMDB": 7.2}, {"Rank": 91, "Movie Title": "Sing", "Gross (M USD)": 634.3, "Theatrical": "12/21/2016", "Digital": "03/03/2017", "Window": 72, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 71.0, "RT Public": 71.0, "IMDB": 7.1}, {"Rank": 92, "Movie Title": "Wonka", "Gross (M USD)": 632.3, "Theatrical": "12/15/2023", "Digital": "01/30/2024", "Window": 46, "Genre": "Fantasy", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 82.0, "RT Public": 91.0, "IMDB": 7.0}, {"Rank": 93, "Movie Title": "F1: The Movie", "Gross (M USD)": 631.6, "Theatrical": "06/27/2025", "Digital": "08/19/2025", "Window": 53, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 84.0, "RT Public": 92.0, "IMDB": 7.8}, {"Rank": 94, "Movie Title": "Water Gate Bridge", "Gross (M USD)": 626.5, "Theatrical": "02/01/2022", "Digital": "04/15/2022", "Window": 73, "Genre": "War", "Country": "China", "Release Company": "Bona Film", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 60.0, "RT Public": 75.0, "IMDB": 5.3}, {"Rank": 95, "Movie Title": "Ant-Man and Wasp", "Gross (M USD)": 622.6, "Theatrical": "07/06/2018", "Digital": "10/02/2018", "Window": 88, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 87.0, "RT Public": 81.0, "IMDB": 7.0}, {"Rank": 96, "Movie Title": "Superman (2025)", "Gross (M USD)": 616.7, "Theatrical": "07/11/2025", "Digital": "08/26/2025", "Window": 46, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 88.0, "RT Public": 90.0, "IMDB": 8.1}, {"Rank": 97, "Movie Title": "Wandering Earth II", "Gross (M USD)": 615.0, "Theatrical": "01/22/2023", "Digital": "04/14/2023", "Window": 82, "Genre": "Sci-Fi", "Country": "China", "Release Company": "China Film", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 82.0, "RT Public": 97.0, "IMDB": 7.5}, {"Rank": 98, "Movie Title": "Ready Player One", "Gross (M USD)": 607.8, "Theatrical": "03/29/2018", "Digital": "07/03/2018", "Window": 96, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 72.0, "RT Public": 77.0, "IMDB": 7.4}, {"Rank": 99, "Movie Title": "Transformers: Last Knight", "Gross (M USD)": 605.4, "Theatrical": "06/21/2017", "Digital": "09/12/2017", "Window": 83, "Genre": "Action", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 16.0, "RT Public": 43.0, "IMDB": 5.2}, {"Rank": 100, "Movie Title": "M:I - Final Reckoning", "Gross (M USD)": 598.7, "Theatrical": "05/23/2025", "Digital": "07/15/2025", "Window": 53, "Genre": "Action", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 93.0, "RT Public": 89.0, "IMDB": 7.8}, {"Rank": 101, "Movie Title": "Operation Red Sea", "Gross (M USD)": 579.3, "Theatrical": "02/16/2018", "Digital": "05/10/2018", "Window": 83, "Genre": "War", "Country": "China", "Release Company": "Bona Film", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 71.0, "RT Public": 72.0, "IMDB": 6.7}, {"Rank": 102, "Movie Title": "Godzilla x Kong", "Gross (M USD)": 572.0, "Theatrical": "03/29/2024", "Digital": "05/14/2024", "Window": 46, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 54.0, "RT Public": 91.0, "IMDB": 6.1}, {"Rank": 103, "Movie Title": "Dead Reckoning Pt 1", "Gross (M USD)": 571.1, "Theatrical": "07/12/2023", "Digital": "10/10/2023", "Window": 90, "Genre": "Action", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 96.0, "RT Public": 94.0, "IMDB": 7.7}, {"Rank": 104, "Movie Title": "Fifty Shades of Grey", "Gross (M USD)": 569.6, "Theatrical": "02/13/2015", "Digital": "05/01/2015", "Window": 77, "Genre": "Drama", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 25.0, "RT Public": 41.0, "IMDB": 4.2}, {"Rank": 105, "Movie Title": "The Little Mermaid", "Gross (M USD)": 569.6, "Theatrical": "05/26/2023", "Digital": "07/25/2023", "Window": 60, "Genre": "Fantasy", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Black", "RT Critic": 67.0, "RT Public": 94.0, "IMDB": 7.2}, {"Rank": 106, "Movie Title": "Kong: Skull Island", "Gross (M USD)": 568.6, "Theatrical": "03/10/2017", "Digital": "05/30/2017", "Window": 81, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 76.0, "RT Public": 69.0, "IMDB": 6.7}, {"Rank": 107, "Movie Title": "The Mermaid", "Gross (M USD)": 553.8, "Theatrical": "02/08/2016", "Digital": "06/07/2016", "Window": 120, "Genre": "Comedy", "Country": "China", "Release Company": "Sony", "Lead Gender": "Female", "Lead Ethnicity": "Asian", "RT Critic": 94.0, "RT Public": 69.0, "IMDB": 6.2}, {"Rank": 108, "Movie Title": "The Grinch", "Gross (M USD)": 552.9, "Theatrical": "11/09/2018", "Digital": "01/22/2019", "Window": 74, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 60.0, "RT Public": 51.0, "IMDB": 6.4}, {"Rank": 109, "Movie Title": "Kung Fu Panda 4", "Gross (M USD)": 547.9, "Theatrical": "03/08/2024", "Digital": "04/09/2024", "Window": 32, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 72.0, "RT Public": 86.0, "IMDB": 6.3}, {"Rank": 110, "Movie Title": "Detective Chinatown 2", "Gross (M USD)": 544.1, "Theatrical": "02/16/2018", "Digital": "04/20/2018", "Window": 63, "Genre": "Comedy", "Country": "China", "Release Company": "Wanda Media", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 54.0, "RT Public": 55.0, "IMDB": 6.0}, {"Rank": 111, "Movie Title": "X-Men: Apocalypse", "Gross (M USD)": 543.9, "Theatrical": "05/27/2016", "Digital": "09/09/2016", "Window": 105, "Genre": "Action", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 47.0, "RT Public": 64.0, "IMDB": 6.9}, {"Rank": 112, "Movie Title": "Cinderella", "Gross (M USD)": 542.3, "Theatrical": "03/13/2015", "Digital": "06/16/2015", "Window": 95, "Genre": "Fantasy", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 83.0, "RT Public": 78.0, "IMDB": 6.9}, {"Rank": 113, "Movie Title": "Hotel Transylvania 3", "Gross (M USD)": 541.5, "Theatrical": "07/13/2018", "Digital": "09/25/2018", "Window": 74, "Genre": "Animation", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 62.0, "RT Public": 49.0, "IMDB": 6.3}, {"Rank": 114, "Movie Title": "HTTYD 3", "Gross (M USD)": 539.9, "Theatrical": "02/22/2019", "Digital": "05/21/2019", "Window": 88, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 90.0, "RT Public": 86.0, "IMDB": 7.4}, {"Rank": 115, "Movie Title": "The Revenant", "Gross (M USD)": 532.9, "Theatrical": "12/25/2015", "Digital": "03/22/2016", "Window": 88, "Genre": "Drama", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 78.0, "RT Public": 84.0, "IMDB": 8.0}, {"Rank": 116, "Movie Title": "No More Bets", "Gross (M USD)": 532.6, "Theatrical": "08/08/2023", "Digital": "10/01/2023", "Window": 54, "Genre": "Thriller", "Country": "China", "Release Company": "Lianrui", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 80.0, "RT Public": 85.0, "IMDB": 6.8}, {"Rank": 117, "Movie Title": "The Meg", "Gross (M USD)": 529.3, "Theatrical": "08/10/2018", "Digital": "10/30/2018", "Window": 81, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 47.0, "RT Public": 42.0, "IMDB": 5.6}, {"Rank": 118, "Movie Title": "Ralph Breaks Internet", "Gross (M USD)": 529.3, "Theatrical": "11/21/2018", "Digital": "02/12/2019", "Window": 83, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 88.0, "RT Public": 65.0, "IMDB": 7.0}, {"Rank": 119, "Movie Title": "The Boss Baby", "Gross (M USD)": 527.9, "Theatrical": "03/31/2017", "Digital": "07/04/2017", "Window": 95, "Genre": "Animation", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 53.0, "RT Public": 51.0, "IMDB": 6.3}, {"Rank": 120, "Movie Title": "Dunkirk", "Gross (M USD)": 527.0, "Theatrical": "07/21/2017", "Digital": "12/12/2017", "Window": 144, "Genre": "War", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 92.0, "RT Public": 81.0, "IMDB": 7.8}, {"Rank": 121, "Movie Title": "Fantastic Four (2025)", "Gross (M USD)": 521.8, "Theatrical": "07/25/2025", "Digital": "09/16/2025", "Window": 53, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 72.0, "RT Public": 85.0, "IMDB": 6.8}, {"Rank": 122, "Movie Title": "Kung Fu Panda 3", "Gross (M USD)": 521.1, "Theatrical": "01/29/2016", "Digital": "05/13/2016", "Window": 105, "Genre": "Animation", "Country": "USA", "Release Company": "Fox", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 87.0, "RT Public": 79.0, "IMDB": 7.1}, {"Rank": 123, "Movie Title": "Ant-Man", "Gross (M USD)": 519.3, "Theatrical": "07/17/2015", "Digital": "10/27/2015", "Window": 102, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 83.0, "RT Public": 85.0, "IMDB": 7.3}, {"Rank": 124, "Movie Title": "Venom 2", "Gross (M USD)": 506.8, "Theatrical": "10/01/2021", "Digital": "11/23/2021", "Window": 53, "Genre": "Action", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 57.0, "RT Public": 84.0, "IMDB": 5.9}, {"Rank": 125, "Movie Title": "Elemental", "Gross (M USD)": 496.4, "Theatrical": "06/16/2023", "Digital": "08/15/2023", "Window": 60, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Other", "RT Critic": 73.0, "RT Public": 93.0, "IMDB": 7.0}, {"Rank": 126, "Movie Title": "Conjuring 4", "Gross (M USD)": 494.6, "Theatrical": "09/05/2025", "Digital": "10/21/2025", "Window": 46, "Genre": "Horror", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 68.0, "RT Public": 82.0, "IMDB": 6.5}, {"Rank": 127, "Movie Title": "Sonic 3", "Gross (M USD)": 492.1, "Theatrical": "12/20/2024", "Digital": "02/11/2025", "Window": 53, "Genre": "Adventure", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 74.0, "RT Public": 91.0, "IMDB": 7.1}, {"Rank": 128, "Movie Title": "War for Planet Apes", "Gross (M USD)": 490.7, "Theatrical": "07/14/2017", "Digital": "10/10/2017", "Window": 88, "Genre": "Action", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 94.0, "RT Public": 84.0, "IMDB": 7.4}, {"Rank": 129, "Movie Title": "Lost in the Stars", "Gross (M USD)": 487.6, "Theatrical": "06/22/2023", "Digital": "08/01/2023", "Window": 40, "Genre": "Thriller", "Country": "China", "Release Company": "Alibaba", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 80.0, "RT Public": 84.0, "IMDB": 6.5}, {"Rank": 130, "Movie Title": "Puss in Boots 2", "Gross (M USD)": 481.0, "Theatrical": "12/21/2022", "Digital": "01/06/2023", "Window": 16, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 95.0, "RT Public": 94.0, "IMDB": 7.8}, {"Rank": 131, "Movie Title": "Venom 3", "Gross (M USD)": 478.9, "Theatrical": "10/25/2024", "Digital": "12/03/2024", "Window": 39, "Genre": "Action", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 41.0, "RT Public": 81.0, "IMDB": 6.2}, {"Rank": 132, "Movie Title": "Wicked: For Good", "Gross (M USD)": 476.3, "Theatrical": "11/21/2025", "Digital": "12/30/2025", "Window": 39, "Genre": "Fantasy", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Female", "Lead Ethnicity": "Black", "RT Critic": 88.0, "RT Public": 95.0, "IMDB": 7.7}, {"Rank": 133, "Movie Title": "Quantumania", "Gross (M USD)": 476.0, "Theatrical": "02/17/2023", "Digital": "04/18/2023", "Window": 60, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 46.0, "RT Public": 82.0, "IMDB": 6.1}, {"Rank": 134, "Movie Title": "Hotel Transylvania 2", "Gross (M USD)": 475.1, "Theatrical": "09/25/2015", "Digital": "12/22/2015", "Window": 88, "Genre": "Animation", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 56.0, "RT Public": 64.0, "IMDB": 6.7}, {"Rank": 135, "Movie Title": "San Andreas", "Gross (M USD)": 474.6, "Theatrical": "05/29/2015", "Digital": "09/22/2015", "Window": 116, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 48.0, "RT Public": 52.0, "IMDB": 6.1}, {"Rank": 136, "Movie Title": "It: Chapter Two", "Gross (M USD)": 473.1, "Theatrical": "09/06/2019", "Digital": "11/19/2019", "Window": 74, "Genre": "Horror", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 62.0, "RT Public": 78.0, "IMDB": 6.5}, {"Rank": 137, "Movie Title": "Greatest Showman", "Gross (M USD)": 471.8, "Theatrical": "12/20/2017", "Digital": "03/20/2018", "Window": 90, "Genre": "Musical", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 56.0, "RT Public": 86.0, "IMDB": 7.5}, {"Rank": 138, "Movie Title": "Bumblebee", "Gross (M USD)": 467.9, "Theatrical": "12/21/2018", "Digital": "03/19/2019", "Window": 88, "Genre": "Action", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 90.0, "RT Public": 74.0, "IMDB": 6.7}, {"Rank": 139, "Movie Title": "Gladiator II", "Gross (M USD)": 462.1, "Theatrical": "11/22/2024", "Digital": "01/07/2025", "Window": 46, "Genre": "Action", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 72.0, "RT Public": 84.0, "IMDB": 6.9}, {"Rank": 140, "Movie Title": "The Eight Hundred", "Gross (M USD)": 461.4, "Theatrical": "08/21/2020", "Digital": "09/30/2020", "Window": 40, "Genre": "War", "Country": "China", "Release Company": "Huayi Bros", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 77.0, "RT Public": 79.0, "IMDB": 6.7}, {"Rank": 141, "Movie Title": "Beetlejuice 2", "Gross (M USD)": 451.0, "Theatrical": "09/06/2024", "Digital": "10/08/2024", "Window": 32, "Genre": "Comedy", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 77.0, "RT Public": 80.0, "IMDB": 6.8}, {"Rank": 142, "Movie Title": "Terminator Genisys", "Gross (M USD)": 440.6, "Theatrical": "07/01/2015", "Digital": "10/20/2015", "Window": 111, "Genre": "Action", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 26.0, "RT Public": 52.0, "IMDB": 6.3}, {"Rank": 143, "Movie Title": "John Wick 4", "Gross (M USD)": 440.1, "Theatrical": "03/24/2023", "Digital": "05/23/2023", "Window": 60, "Genre": "Action", "Country": "USA", "Release Company": "Lionsgate", "Lead Gender": "Male", "Lead Ethnicity": "Mixed", "RT Critic": 94.0, "RT Public": 93.0, "IMDB": 7.7}, {"Rank": 144, "Movie Title": "Dune", "Gross (M USD)": 434.8, "Theatrical": "10/22/2021", "Digital": "10/22/2021", "Window": 0, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 83.0, "RT Public": 90.0, "IMDB": 8.0}, {"Rank": 145, "Movie Title": "Detective Pikachu", "Gross (M USD)": 433.2, "Theatrical": "05/10/2019", "Digital": "07/23/2019", "Window": 74, "Genre": "Adventure", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 68.0, "RT Public": 79.0, "IMDB": 6.5}, {"Rank": 146, "Movie Title": "Shang-Chi", "Gross (M USD)": 432.2, "Theatrical": "09/03/2021", "Digital": "11/12/2021", "Window": 70, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 91.0, "RT Public": 98.0, "IMDB": 7.4}, {"Rank": 147, "Movie Title": "Pets 2", "Gross (M USD)": 430.0, "Theatrical": "06/07/2019", "Digital": "08/13/2019", "Window": 67, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 60.0, "RT Public": 90.0, "IMDB": 6.4}, {"Rank": 148, "Movie Title": "Captain America 4", "Gross (M USD)": 415.1, "Theatrical": "02/14/2025", "Digital": "04/01/2025", "Window": 46, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Black", "RT Critic": 70.0, "RT Public": 84.0, "IMDB": 6.5}, {"Rank": 149, "Movie Title": "Ice Age 5", "Gross (M USD)": 408.5, "Theatrical": "07/22/2016", "Digital": "10/11/2016", "Window": 81, "Genre": "Animation", "Country": "USA", "Release Company": "Fox", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 18.0, "RT Public": 39.0, "IMDB": 5.7}, {"Rank": 150, "Movie Title": "Sing 2", "Gross (M USD)": 408.4, "Theatrical": "12/22/2021", "Digital": "01/07/2022", "Window": 16, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 72.0, "RT Public": 98.0, "IMDB": 7.4}, {"Rank": 151, "Movie Title": "Alita: Battle Angel", "Gross (M USD)": 405.0, "Theatrical": "02/14/2019", "Digital": "07/09/2019", "Window": 145, "Genre": "Action", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Female", "Lead Ethnicity": "Mixed", "RT Critic": 61.0, "RT Public": 92.0, "IMDB": 7.3}, {"Rank": 152, "Movie Title": "Bad Boys 4", "Gross (M USD)": 404.5, "Theatrical": "06/07/2024", "Digital": "07/23/2024", "Window": 46, "Genre": "Action", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "Black", "RT Critic": 65.0, "RT Public": 97.0, "IMDB": 6.7}, {"Rank": 153, "Movie Title": "Kingsman", "Gross (M USD)": 404.5, "Theatrical": "02/13/2015", "Digital": "05/15/2015", "Window": 91, "Genre": "Action", "Country": "UK", "Release Company": "Fox", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 75.0, "RT Public": 84.0, "IMDB": 7.7}, {"Rank": 154, "Movie Title": "Eternals", "Gross (M USD)": 402.0, "Theatrical": "11/05/2021", "Digital": "01/12/2022", "Window": 68, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Asian", "RT Critic": 47.0, "RT Public": 77.0, "IMDB": 6.3}, {"Rank": 155, "Movie Title": "Uncharted", "Gross (M USD)": 401.7, "Theatrical": "02/18/2022", "Digital": "04/26/2022", "Window": 67, "Genre": "Action", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 41.0, "RT Public": 90.0, "IMDB": 6.3}, {"Rank": 156, "Movie Title": "Meg 2", "Gross (M USD)": 397.7, "Theatrical": "08/04/2023", "Digital": "08/25/2023", "Window": 21, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 27.0, "RT Public": 73.0, "IMDB": 5.0}, {"Rank": 157, "Movie Title": "Black Adam", "Gross (M USD)": 393.2, "Theatrical": "10/21/2022", "Digital": "11/22/2022", "Window": 32, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "Mixed", "RT Critic": 38.0, "RT Public": 88.0, "IMDB": 6.2}, {"Rank": 158, "Movie Title": "Godzilla: King Monsters", "Gross (M USD)": 387.3, "Theatrical": "05/31/2019", "Digital": "08/13/2019", "Window": 74, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 42.0, "RT Public": 83.0, "IMDB": 6.0}, {"Rank": 159, "Movie Title": "Into the Spider-Verse", "Gross (M USD)": 384.3, "Theatrical": "12/14/2018", "Digital": "02/26/2019", "Window": 74, "Genre": "Animation", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "Mixed", "RT Critic": 97.0, "RT Public": 93.0, "IMDB": 8.4}, {"Rank": 160, "Movie Title": "Indiana Jones 5", "Gross (M USD)": 383.9, "Theatrical": "06/30/2023", "Digital": "08/29/2023", "Window": 60, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 70.0, "RT Public": 88.0, "IMDB": 6.6}, {"Rank": 161, "Movie Title": "Thunderbolts*", "Gross (M USD)": 382.4, "Theatrical": "05/02/2025", "Digital": "06/17/2025", "Window": 46, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 68.0, "RT Public": 82.0, "IMDB": 6.7}, {"Rank": 162, "Movie Title": "Black Widow", "Gross (M USD)": 379.7, "Theatrical": "07/09/2021", "Digital": "07/09/2021", "Window": 0, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 79.0, "RT Public": 91.0, "IMDB": 6.7}, {"Rank": 163, "Movie Title": "Twisters", "Gross (M USD)": 371.0, "Theatrical": "07/19/2024", "Digital": "08/13/2024", "Window": 25, "Genre": "Action", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 75.0, "RT Public": 91.0, "IMDB": 6.6}, {"Rank": 164, "Movie Title": "Sinners (2025)", "Gross (M USD)": 367.9, "Theatrical": "03/07/2025", "Digital": "04/22/2025", "Window": 46, "Genre": "Horror", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "Black", "RT Critic": 82.0, "RT Public": 88.0, "IMDB": 7.3}, {"Rank": 165, "Movie Title": "Tenet", "Gross (M USD)": 365.3, "Theatrical": "09/03/2020", "Digital": "12/15/2020", "Window": 103, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "Black", "RT Critic": 69.0, "RT Public": 76.0, "IMDB": 7.3}, {"Rank": 166, "Movie Title": "Alien: Romulus", "Gross (M USD)": 350.8, "Theatrical": "08/16/2024", "Digital": "10/15/2024", "Window": 60, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 80.0, "RT Public": 85.0, "IMDB": 7.2}, {"Rank": 167, "Movie Title": "Star Trek Beyond", "Gross (M USD)": 343.4, "Theatrical": "07/22/2016", "Digital": "10/04/2016", "Window": 74, "Genre": "Action", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 86.0, "RT Public": 80.0, "IMDB": 7.0}, {"Rank": 168, "Movie Title": "Monster Hunter", "Gross (M USD)": 341.0, "Theatrical": "12/18/2020", "Digital": "02/16/2021", "Window": 60, "Genre": "Action", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 44.0, "RT Public": 70.0, "IMDB": 5.2}, {"Rank": 169, "Movie Title": "Free Guy", "Gross (M USD)": 331.5, "Theatrical": "08/13/2021", "Digital": "09/28/2021", "Window": 46, "Genre": "Action", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 80.0, "RT Public": 94.0, "IMDB": 7.1}, {"Rank": 170, "Movie Title": "Sonic the Hedgehog", "Gross (M USD)": 319.7, "Theatrical": "02/14/2020", "Digital": "03/31/2020", "Window": 46, "Genre": "Action", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 63.0, "RT Public": 93.0, "IMDB": 6.5}, {"Rank": 171, "Movie Title": "Final Destination 6", "Gross (M USD)": 315.8, "Theatrical": "08/01/2025", "Digital": "09/16/2025", "Window": 46, "Genre": "Horror", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 58.0, "RT Public": 81.0, "IMDB": 5.8}, {"Rank": 172, "Movie Title": "The Wild Robot", "Gross (M USD)": 309.5, "Theatrical": "09/27/2024", "Digital": "10/15/2024", "Window": 18, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Female", "Lead Ethnicity": "Other", "RT Critic": 98.0, "RT Public": 98.0, "IMDB": 8.2}, {"Rank": 173, "Movie Title": "Five Nights at Freddy's", "Gross (M USD)": 291.5, "Theatrical": "10/27/2023", "Digital": "10/27/2023", "Window": 0, "Genre": "Horror", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 32.0, "RT Public": 87.0, "IMDB": 5.5}, {"Rank": 174, "Movie Title": "The Flash", "Gross (M USD)": 270.6, "Theatrical": "06/16/2023", "Digital": "07/18/2023", "Window": 32, "Genre": "Action", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "Mixed", "RT Critic": 63.0, "RT Public": 83.0, "IMDB": 6.7}, {"Rank": 175, "Movie Title": "Weapons (2025)", "Gross (M USD)": 269.0, "Theatrical": "01/17/2025", "Digital": "03/04/2025", "Window": 46, "Genre": "Horror", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 72.0, "RT Public": 80.0, "IMDB": 6.8}, {"Rank": 176, "Movie Title": "Wish", "Gross (M USD)": 254.9, "Theatrical": "11/22/2023", "Digital": "01/23/2024", "Window": 62, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Mixed", "RT Critic": 48.0, "RT Public": 81.0, "IMDB": 5.6}, {"Rank": 177, "Movie Title": "The Bad Guys 2", "Gross (M USD)": 239.3, "Theatrical": "08/01/2025", "Digital": "09/16/2025", "Window": 46, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 79.0, "RT Public": 88.0, "IMDB": 6.8}, {"Rank": 178, "Movie Title": "Bullet Train", "Gross (M USD)": 239.3, "Theatrical": "08/05/2022", "Digital": "09/27/2022", "Window": 53, "Genre": "Action", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 54.0, "RT Public": 84.0, "IMDB": 7.3}, {"Rank": 179, "Movie Title": "Cruella", "Gross (M USD)": 233.5, "Theatrical": "05/28/2021", "Digital": "05/28/2021", "Window": 0, "Genre": "Comedy", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 75.0, "RT Public": 97.0, "IMDB": 7.3}, {"Rank": 180, "Movie Title": "Lightyear", "Gross (M USD)": 226.4, "Theatrical": "06/17/2022", "Digital": "08/03/2022", "Window": 47, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 74.0, "RT Public": 84.0, "IMDB": 6.1}, {"Rank": 181, "Movie Title": "Napoleon", "Gross (M USD)": 221.4, "Theatrical": "11/22/2023", "Digital": "01/09/2024", "Window": 48, "Genre": "Biography", "Country": "USA", "Release Company": "Sony/Apple", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 58.0, "RT Public": 59.0, "IMDB": 6.4}, {"Rank": 182, "Movie Title": "Jungle Cruise", "Gross (M USD)": 221.0, "Theatrical": "07/30/2021", "Digital": "07/30/2021", "Window": 0, "Genre": "Adventure", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 63.0, "RT Public": 92.0, "IMDB": 6.6}, {"Rank": 183, "Movie Title": "Anyone But You", "Gross (M USD)": 219.0, "Theatrical": "12/22/2023", "Digital": "02/20/2024", "Window": 60, "Genre": "Romance", "Country": "USA", "Release Company": "Sony", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 55.0, "RT Public": 87.0, "IMDB": 6.1}, {"Rank": 184, "Movie Title": "Now You See Me 3", "Gross (M USD)": 214.4, "Theatrical": "10/31/2025", "Digital": "12/16/2025", "Window": 46, "Genre": "Thriller", "Country": "USA", "Release Company": "Lionsgate", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 55.0, "RT Public": 79.0, "IMDB": 6.2}, {"Rank": 185, "Movie Title": "The Marvels", "Gross (M USD)": 206.1, "Theatrical": "11/10/2023", "Digital": "01/16/2024", "Window": 67, "Genre": "Action", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Mixed", "RT Critic": 62.0, "RT Public": 82.0, "IMDB": 5.5}, {"Rank": 186, "Movie Title": "Snow White (2025)", "Gross (M USD)": 205.6, "Theatrical": "03/21/2025", "Digital": "05/13/2025", "Window": 53, "Genre": "Fantasy", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "Mixed", "RT Critic": 61.0, "RT Public": 72.0, "IMDB": 5.5}, {"Rank": 187, "Movie Title": "FNAF 2", "Gross (M USD)": 188.1, "Theatrical": "12/05/2025", "Digital": "01/20/2026", "Window": 46, "Genre": "Horror", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 45.0, "RT Public": 88.0, "IMDB": 5.8}, {"Rank": 188, "Movie Title": "Predator: Badlands", "Gross (M USD)": 183.3, "Theatrical": "11/07/2025", "Digital": "12/23/2025", "Window": 46, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 88.0, "RT Public": 82.0, "IMDB": 7.2}, {"Rank": 189, "Movie Title": "Chainsaw Man", "Gross (M USD)": 154.3, "Theatrical": "07/11/2025", "Digital": "08/26/2025", "Window": 46, "Genre": "Animation", "Country": "Japan", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "Asian", "RT Critic": 92.0, "RT Public": 95.0, "IMDB": 8.4}, {"Rank": 190, "Movie Title": "Elio", "Gross (M USD)": 154.2, "Theatrical": "06/13/2025", "Digital": "07/29/2025", "Window": 46, "Genre": "Animation", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 78.0, "RT Public": 84.0, "IMDB": 6.9}, {"Rank": 191, "Movie Title": "Freakier Friday", "Gross (M USD)": 153.1, "Theatrical": "08/08/2025", "Digital": "09/23/2025", "Window": 46, "Genre": "Comedy", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 68.0, "RT Public": 75.0, "IMDB": 6.1}, {"Rank": 192, "Movie Title": "28 Years Later", "Gross (M USD)": 151.3, "Theatrical": "06/20/2025", "Digital": "08/05/2025", "Window": 46, "Genre": "Horror", "Country": "UK", "Release Company": "Sony", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 82.0, "RT Public": 85.0, "IMDB": 7.5}, {"Rank": 193, "Movie Title": "Dog Man", "Gross (M USD)": 145.6, "Theatrical": "01/31/2025", "Digital": "03/18/2025", "Window": 46, "Genre": "Animation", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 74.0, "RT Public": 88.0, "IMDB": 6.8}, {"Rank": 194, "Movie Title": "Tron: Ares", "Gross (M USD)": 142.2, "Theatrical": "10/10/2025", "Digital": "11/25/2025", "Window": 46, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Disney", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 58.0, "RT Public": 72.0, "IMDB": 6.3}, {"Rank": 195, "Movie Title": "Bridget Jones 4", "Gross (M USD)": 140.4, "Theatrical": "02/14/2025", "Digital": "03/25/2025", "Window": 39, "Genre": "Romance", "Country": "UK", "Release Company": "Universal", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 75.0, "RT Public": 81.0, "IMDB": 6.8}, {"Rank": 196, "Movie Title": "Ballerina (2025)", "Gross (M USD)": 137.2, "Theatrical": "06/06/2025", "Digital": "07/22/2025", "Window": 46, "Genre": "Action", "Country": "USA", "Release Company": "Lionsgate", "Lead Gender": "Female", "Lead Ethnicity": "White", "RT Critic": 70.0, "RT Public": 82.0, "IMDB": 6.5}, {"Rank": 197, "Movie Title": "Avatar: Fire and Ash", "Gross (M USD)": 136.9, "Theatrical": "12/19/2025", "Digital": "02/03/2026", "Window": 46, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "20th Century", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 78.0, "RT Public": 90.0, "IMDB": 7.5}, {"Rank": 198, "Movie Title": "Mickey 17", "Gross (M USD)": 133.3, "Theatrical": "01/31/2025", "Digital": "03/18/2025", "Window": 46, "Genre": "Sci-Fi", "Country": "USA", "Release Company": "Warner Bros", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 85.0, "RT Public": 88.0, "IMDB": 7.9}, {"Rank": 199, "Movie Title": "Black Phone 2", "Gross (M USD)": 132.1, "Theatrical": "10/17/2025", "Digital": "12/02/2025", "Window": 46, "Genre": "Horror", "Country": "USA", "Release Company": "Universal", "Lead Gender": "Male", "Lead Ethnicity": "White", "RT Critic": 68.0, "RT Public": 79.0, "IMDB": 6.4}, {"Rank": 200, "Movie Title": "Smurfs (2025)", "Gross (M USD)": 124.1, "Theatrical": "07/18/2025", "Digital": "09/02/2025", "Window": 46, "Genre": "Animation", "Country": "USA", "Release Company": "Paramount", "Lead Gender": "Male", "Lead Ethnicity": "Other", "RT Critic": 55.0, "RT Public": 70.0, "IMDB": 5.5}];
+
+// Parse dates
+const parseDate = d3.timeParse("%m/%d/%Y");
+DATA.forEach(d => {
+  d.theatrical = parseDate(d.Theatrical);
+  d.digital = parseDate(d.Digital);
+  d.gross = +d["Gross (M USD)"];
+  d.imdb = +d.IMDB;
+  d.rtCritic = +d["RT Critic"];
+  d.rtPublic = +d["RT Public"];
+});
+
+// Populate genre dropdown
+const genres = Array.from(new Set(DATA.map(d => d.Genre))).sort();
+const genreSelect = document.getElementById("filter-genre");
+genres.forEach(g => {
+  const opt = document.createElement("option");
+  opt.value = g; opt.textContent = g;
+  genreSelect.appendChild(opt);
+});
+
+const tooltip = d3.select("#tooltip");
+
+// ============ CHART 1: SCATTER WITH DASHES ============
+function drawScatter() {
+  const container = document.getElementById("scatter");
+  container.innerHTML = "";
+
+  const margin = {top: 20, right: 40, bottom: 50, left: 70};
+  const width = Math.min(container.clientWidth, 1200) - margin.left - margin.right;
+  const height = 480 - margin.top - margin.bottom;
+
+  const svg = d3.select("#scatter")
+    .append("svg")
+    .attr("width", width + margin.left + margin.right)
+    .attr("height", height + margin.top + margin.bottom);
+
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  const x = d3.scaleTime()
+    .domain([d3.timeMonth.offset(d3.min(DATA, d => d.theatrical), -3),
+             d3.timeMonth.offset(d3.max(DATA, d => d.digital), 3)])
+    .range([0, width]);
+
+  const y = d3.scaleSqrt()
+    .domain([0, d3.max(DATA, d => d.gross) * 1.05])
+    .range([height, 0]);
+
+  // Gridlines
+  g.append("g")
+    .attr("class", "grid")
+    .selectAll("line")
+    .data(y.ticks(6))
+    .enter()
+    .append("line")
+    .attr("class", "gridline")
+    .attr("x1", 0).attr("x2", width)
+    .attr("y1", d => y(d)).attr("y2", d => y(d));
+
+  // Axes
+  g.append("g")
+    .attr("class", "axis")
+    .attr("transform", `translate(0,${height})`)
+    .call(d3.axisBottom(x).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat("%Y")));
+
+  g.append("g")
+    .attr("class", "axis")
+    .call(d3.axisLeft(y).ticks(6).tickFormat(d => d === 0 ? "0" : d + "M"));
+
+  // Axis labels
+  g.append("text")
+    .attr("x", -height/2).attr("y", -50)
+    .attr("transform", "rotate(-90)")
+    .attr("text-anchor", "middle")
+    .style("fill", "var(--muted)")
+    .style("font-size", "12px")
+    .text("Global Gross Box Office (Million USD)");
+
+  g.append("text")
+    .attr("x", width/2).attr("y", height + 40)
+    .attr("text-anchor", "middle")
+    .style("fill", "var(--muted)")
+    .style("font-size", "12px")
+    .text("Release Date");
+
+  // Trend line (linear regression on theatrical date vs gross)
+  const xVals = DATA.map(d => d.theatrical.getTime());
+  const yVals = DATA.map(d => d.gross);
+  const n = DATA.length;
+  const meanX = d3.mean(xVals), meanY = d3.mean(yVals);
+  const slope = d3.sum(xVals.map((xi,i) => (xi-meanX)*(yVals[i]-meanY))) /
+                d3.sum(xVals.map(xi => (xi-meanX)**2));
+  const intercept = meanY - slope * meanX;
+  const xMin = x.domain()[0].getTime(), xMax = x.domain()[1].getTime();
+
+  g.append("line")
+    .attr("x1", x(new Date(xMin))).attr("y1", y(Math.max(0, intercept + slope*xMin)))
+    .attr("x2", x(new Date(xMax))).attr("y2", y(Math.max(0, intercept + slope*xMax)))
+    .attr("stroke", "#666").attr("stroke-width", 1).attr("stroke-dasharray", "5,4")
+    .attr("opacity", 0.7);
+
+  g.append("text")
+    .attr("x", width - 8).attr("y", y(Math.max(0, intercept + slope*xMax)) - 8)
+    .attr("text-anchor", "end")
+    .style("fill", "#888").style("font-size", "10px").style("font-style", "italic")
+    .text("box office trend ↘");
+
+  // === Yearly average release window (grey shadow strip) ===
+  const yearlyAvg = d3.rollup(
+    DATA,
+    v => ({ avg: d3.mean(v, d => d.Window), n: v.length }),
+    d => d.theatrical.getFullYear()
+  );
+
+  const stripY = height - 18;
+
+  // Strip label
+  g.append("text")
+    .attr("x", 4).attr("y", stripY + 18)
+    .style("fill", "#666").style("font-size", "9px").style("font-style", "italic")
+    .text("yearly avg release window");
+
+  Array.from(yearlyAvg.entries()).sort((a,b) => a[0] - b[0]).forEach(([year, info]) => {
+    const startDate = new Date(year, 0, 1);
+    const endDate = new Date(startDate.getTime() + info.avg * 24 * 60 * 60 * 1000);
+    const xStart = x(startDate);
+    const xEnd = x(endDate);
+    if (xEnd < 0 || xStart > width) return;
+
+    // Soft grey shadow bar
+    g.append("rect")
+      .attr("x", xStart).attr("y", stripY - 5)
+      .attr("width", Math.max(2, xEnd - xStart)).attr("height", 10)
+      .attr("fill", "#c4c4cc").attr("opacity", 0.22)
+      .attr("rx", 3);
+
+    // Days label centered
+    g.append("text")
+      .attr("x", (xStart + xEnd) / 2).attr("y", stripY - 7)
+      .attr("text-anchor", "middle")
+      .style("fill", "#999").style("font-size", "9px").style("font-weight", "600")
+      .text(Math.round(info.avg) + "d");
+  });
+
+  // Movie dashes
+  const movies = g.append("g").selectAll("g.movie")
+    .data(DATA)
+    .enter()
+    .append("g")
+    .attr("class", "movie");
+
+  movies.append("line")
+    .attr("class", "movie-dash")
+    .attr("x1", d => x(d.theatrical))
+    .attr("x2", d => x(d.digital))
+    .attr("y1", d => y(d.gross))
+    .attr("y2", d => y(d.gross));
+
+  movies.append("circle")
+    .attr("class", "theatrical-dot")
+    .attr("cx", d => x(d.theatrical))
+    .attr("cy", d => y(d.gross))
+    .attr("r", 2.5);
+
+  movies.append("circle")
+    .attr("class", "digital-dot")
+    .attr("cx", d => x(d.digital))
+    .attr("cy", d => y(d.gross))
+    .attr("r", 2.5);
+
+  // Hover hit area (bigger invisible rect)
+  movies.append("rect")
+    .attr("x", d => Math.min(x(d.theatrical), x(d.digital)) - 4)
+    .attr("y", d => y(d.gross) - 6)
+    .attr("width", d => Math.abs(x(d.digital) - x(d.theatrical)) + 8)
+    .attr("height", 12)
+    .attr("fill", "transparent")
+    .style("cursor", "pointer")
+    .on("mouseover", function(event, d) {
+      d3.select(this.parentNode).select(".movie-dash").classed("hover", true);
+      d3.select(this.parentNode).selectAll("circle").attr("r", 4);
+      tooltip.style("opacity", 1).html(`
+        <div class="title">${d["Movie Title"]}</div>
+        <div class="row"><span class="label">Gross:</span> <span>$${d.gross.toFixed(1)}M</span></div>
+        <div class="row"><span class="label">Theatrical:</span> <span class="yellow-text">${d.Theatrical}</span></div>
+        <div class="row"><span class="label">Digital:</span> <span class="red-text">${d.Digital}</span></div>
+        <div class="row"><span class="label">Window:</span> <span>${d.Window} days</span></div>
+        <div class="row"><span class="label">Genre:</span> <span>${d.Genre}</span></div>
+        <div class="row"><span class="label">Country:</span> <span>${d.Country}</span></div>
+        <div class="row"><span class="label">Lead:</span> <span>${d["Lead Gender"]} / ${d["Lead Ethnicity"]}</span></div>
+        <div class="row"><span class="label">IMDB:</span> <span class="yellow-text">${d.imdb}</span></div>
+        <div class="row"><span class="label">RT Critic:</span> <span class="red-text">${d.rtCritic}%</span></div>
+      `);
+    })
+    .on("mousemove", function(event) {
+      tooltip
+        .style("left", (event.pageX + 14) + "px")
+        .style("top", (event.pageY - 10) + "px");
+    })
+    .on("mouseout", function() {
+      d3.select(this.parentNode).select(".movie-dash").classed("hover", false);
+      d3.select(this.parentNode).selectAll("circle").attr("r", 2.5);
+      tooltip.style("opacity", 0);
+    });
+}
+
+// ============ CHART 2: DIVERGING BAR CHART ============
+function applyFilters() {
+  const gender = document.getElementById("filter-gender").value;
+  const ethnicity = document.getElementById("filter-ethnicity").value;
+  const genre = document.getElementById("filter-genre").value;
+  const topN = +document.getElementById("filter-top").value;
+
+  let filtered = DATA.slice();
+
+  if (gender !== "All") filtered = filtered.filter(d => d["Lead Gender"] === gender);
+
+  if (ethnicity !== "All") {
+    if (ethnicity === "Non-White") {
+      filtered = filtered.filter(d => d["Lead Ethnicity"] !== "White");
+    } else {
+      filtered = filtered.filter(d => d["Lead Ethnicity"] === ethnicity);
+    }
+  }
+
+  if (genre !== "All") filtered = filtered.filter(d => d.Genre === genre);
+
+  filtered.sort((a, b) => b.gross - a.gross);
+  return filtered.slice(0, topN);
+}
+
+function drawDiverging() {
+  const filtered = applyFilters();
+  const container = document.getElementById("diverging");
+  container.innerHTML = "";
+
+  // Update summary
+  const summaryEl = document.getElementById("summary");
+  if (filtered.length === 0) {
+    summaryEl.innerHTML = "";
+    container.innerHTML = '<div class="empty-state">No movies match these filters.</div>';
+    return;
+  }
+
+  const avgIMDB = d3.mean(filtered, d => d.imdb * 10);
+  const avgRT = d3.mean(filtered, d => d.rtCritic);
+  const diff = avgRT - avgIMDB;
+  const diffWord = diff > 0 ? `${Math.abs(diff).toFixed(0)}% higher` : `${Math.abs(diff).toFixed(0)}% lower`;
+  const diffColor = diff > 0 ? "var(--red)" : "var(--gold)";
+
+  summaryEl.innerHTML = `
+    <strong>${filtered.length}</strong> movies &nbsp;·&nbsp;
+    Avg IMDB <span style="color:var(--gold)">${(avgIMDB/10).toFixed(2)}</span> &nbsp;·&nbsp;
+    Avg RT Critic <span style="color:var(--red)">${avgRT.toFixed(0)}%</span> &nbsp;·&nbsp;
+    Critics rate ${filtered.length > 0 ? `<span style="color:${diffColor}">${diffWord}</span> than audience` : ''}
+  `;
+
+  // Layout
+  const rowHeight = 26;
+  const margin = {top: 30, right: 60, bottom: 20, left: 60};
+  const titleColWidth = 200;
+  const labelColWidth = 50;
+  const barAreaWidth = 320;
+  const centerGap = 16;
+  const width = titleColWidth + labelColWidth + barAreaWidth * 2 + centerGap + margin.left + margin.right;
+  const height = filtered.length * rowHeight + margin.top + margin.bottom + 20;
+
+  const svg = d3.select("#diverging")
+    .append("svg")
+    .attr("width", width)
+    .attr("height", height);
+
+  const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+  // Scales — both 0 to 100
+  const xLeft = d3.scaleLinear().domain([0, 100]).range([barAreaWidth, 0]);
+  const xRight = d3.scaleLinear().domain([0, 100]).range([0, barAreaWidth]);
+
+  const centerX = titleColWidth + labelColWidth + barAreaWidth + centerGap / 2;
+  const leftBarStart = titleColWidth + labelColWidth;
+  const rightBarStart = centerX + centerGap / 2;
+
+  // Headers
+  g.append("text")
+    .attr("x", leftBarStart + barAreaWidth - 8).attr("y", -10)
+    .attr("text-anchor", "end")
+    .style("fill", "var(--gold)").style("font-size", "11px").style("font-weight", "600")
+    .style("text-transform", "uppercase").style("letter-spacing", "1px")
+    .text("← IMDB Audience");
+
+  g.append("text")
+    .attr("x", rightBarStart + 8).attr("y", -10)
+    .attr("text-anchor", "start")
+    .style("fill", "var(--red)").style("font-size", "11px").style("font-weight", "600")
+    .style("text-transform", "uppercase").style("letter-spacing", "1px")
+    .text("RT Critic →");
+
+  g.append("text")
+    .attr("x", 0).attr("y", -10)
+    .style("fill", "var(--muted)").style("font-size", "10px")
+    .style("text-transform", "uppercase").style("letter-spacing", "1px")
+    .text("Movie (ranked by box office)");
+
+  // Tick marks on the bar scale
+  const tickValues = [25, 50, 75, 100];
+  tickValues.forEach(t => {
+    g.append("line")
+      .attr("x1", leftBarStart + xLeft(t)).attr("x2", leftBarStart + xLeft(t))
+      .attr("y1", 0).attr("y2", filtered.length * rowHeight)
+      .attr("stroke", "#1f1f25").attr("stroke-dasharray", "2,2");
+    g.append("line")
+      .attr("x1", rightBarStart + xRight(t)).attr("x2", rightBarStart + xRight(t))
+      .attr("y1", 0).attr("y2", filtered.length * rowHeight)
+      .attr("stroke", "#1f1f25").attr("stroke-dasharray", "2,2");
+  });
+
+  // Center line
+  g.append("line")
+    .attr("class", "center-line")
+    .attr("x1", centerX).attr("x2", centerX)
+    .attr("y1", 0).attr("y2", filtered.length * rowHeight);
+
+  // Bar rows
+  const rows = g.selectAll("g.bar-row")
+    .data(filtered)
+    .enter()
+    .append("g")
+    .attr("class", "bar-row")
+    .attr("transform", (d, i) => `translate(0, ${i * rowHeight})`);
+
+  // Movie title
+  rows.append("text")
+    .attr("x", 0).attr("y", rowHeight / 2 + 4)
+    .style("font-size", "11px")
+    .text(d => d["Movie Title"].length > 28 ? d["Movie Title"].slice(0, 26) + "…" : d["Movie Title"]);
+
+  // IMDB value label — inside the bar at its left tip
+  rows.append("text")
+    .attr("class", "value-label")
+    .attr("x", d => leftBarStart + xLeft(d.imdb * 10) + 5).attr("y", rowHeight / 2 + 3)
+    .style("fill", "#1a1a20")
+    .style("text-anchor", "start")
+    .style("font-size", "10px")
+    .style("font-weight", "700")
+    .text(d => d.imdb.toFixed(1));
+
+  // RT value label — inside the bar at its right tip
+  rows.append("text")
+    .attr("class", "value-label")
+    .attr("x", d => rightBarStart + xRight(d.rtCritic) - 5).attr("y", rowHeight / 2 + 3)
+    .style("fill", "#fff")
+    .style("text-anchor", "end")
+    .style("font-size", "10px")
+    .style("font-weight", "700")
+    .text(d => d.rtCritic + "%");
+
+  // IMDB bar (leftward, value × 10 to compare with RT %)
+  rows.append("rect")
+    .attr("class", "bar-imdb")
+    .attr("x", d => leftBarStart + xLeft(d.imdb * 10))
+    .attr("y", 5)
+    .attr("width", d => barAreaWidth - xLeft(d.imdb * 10))
+    .attr("height", rowHeight - 10);
+
+  // RT bar (rightward)
+  rows.append("rect")
+    .attr("class", "bar-rt")
+    .attr("x", rightBarStart)
+    .attr("y", 5)
+    .attr("width", d => xRight(d.rtCritic))
+    .attr("height", rowHeight - 10);
+
+  // Box office label on right
+  rows.append("text")
+    .attr("x", rightBarStart + barAreaWidth + 8).attr("y", rowHeight / 2 + 3)
+    .style("fill", "var(--muted)").style("font-size", "10px")
+    .text(d => "$" + d.gross.toFixed(0) + "M");
+
+  // Hover interactions
+  rows.style("cursor", "pointer")
+    .on("mouseover", function(event, d) {
+      d3.select(this).selectAll("rect").attr("opacity", 0.7);
+      tooltip.style("opacity", 1).html(`
+        <div class="title">${d["Movie Title"]}</div>
+        <div class="row"><span class="label">Gross:</span> <span>$${d.gross.toFixed(1)}M</span></div>
+        <div class="row"><span class="label">IMDB:</span> <span class="yellow-text">${d.imdb}</span> <span style="color:var(--muted)">(×10 = ${(d.imdb*10).toFixed(0)})</span></div>
+        <div class="row"><span class="label">RT Critic:</span> <span class="red-text">${d.rtCritic}%</span></div>
+        <div class="row"><span class="label">RT Public:</span> <span>${d.rtPublic}%</span></div>
+        <div class="row"><span class="label">Lead:</span> <span>${d["Lead Gender"]} / ${d["Lead Ethnicity"]}</span></div>
+        <div class="row"><span class="label">Genre:</span> <span>${d.Genre}</span></div>
+        <div class="row"><span class="label">Country:</span> <span>${d.Country}</span></div>
+      `);
+    })
+    .on("mousemove", function(event) {
+      tooltip
+        .style("left", (event.pageX + 14) + "px")
+        .style("top", (event.pageY - 10) + "px");
+    })
+    .on("mouseout", function() {
+      d3.select(this).selectAll("rect").attr("opacity", 1);
+      tooltip.style("opacity", 0);
+    });
+
+  // Average lines
+  const avgImdbX = leftBarStart + xLeft(avgIMDB);
+  const avgRtX = rightBarStart + xRight(avgRT);
+
+  g.append("line")
+    .attr("class", "avg-line")
+    .attr("x1", avgImdbX).attr("x2", avgImdbX)
+    .attr("y1", -2).attr("y2", filtered.length * rowHeight + 2)
+    .attr("stroke", "var(--gold)");
+
+  g.append("line")
+    .attr("class", "avg-line")
+    .attr("x1", avgRtX).attr("x2", avgRtX)
+    .attr("y1", -2).attr("y2", filtered.length * rowHeight + 2)
+    .attr("stroke", "var(--red)");
+
+  // Avg labels at the bottom
+  g.append("text")
+    .attr("class", "avg-label")
+    .attr("x", avgImdbX).attr("y", filtered.length * rowHeight + 15)
+    .attr("text-anchor", "middle")
+    .style("fill", "var(--gold)")
+    .text(`avg ${(avgIMDB/10).toFixed(2)}`);
+
+  g.append("text")
+    .attr("class", "avg-label")
+    .attr("x", avgRtX).attr("y", filtered.length * rowHeight + 15)
+    .attr("text-anchor", "middle")
+    .style("fill", "var(--red)")
+    .text(`avg ${avgRT.toFixed(0)}%`);
+}
+
+// ============ EXPORT TO PNG ============
+function xmlEscape(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function exportDivergingPNG() {
+  const svg = document.querySelector('#diverging svg');
+  if (!svg) { alert('No chart to export — try adjusting filters first.'); return; }
+
+  const origW = +svg.getAttribute('width');
+  const origH = +svg.getAttribute('height');
+
+  // Filter info → title + filename
+  const gender = document.getElementById("filter-gender").value;
+  const ethnicity = document.getElementById("filter-ethnicity").value;
+  const genre = document.getElementById("filter-genre").value;
+  const topN = document.getElementById("filter-top").value;
+
+  let parts = [];
+  if (gender !== 'All') parts.push(gender + '-Led');
+  if (ethnicity !== 'All') parts.push(ethnicity);
+  if (genre !== 'All') parts.push(genre);
+  const scenarioStr = parts.length === 0 ? 'All Movies' : parts.join(' · ');
+  const topNStr = topN === '999' ? 'All' : 'Top ' + topN;
+  const titleText = `${topNStr}: ${scenarioStr}`;
+  const summaryText = (document.getElementById("summary").textContent || '').replace(/\s+/g, ' ').trim();
+
+  // Layout for export
+  const headerH = 88;
+  const footerH = 22;
+  const padding = 24;
+  const newW = origW + padding * 2;
+  const newH = origH + headerH + footerH + padding;
+
+  // Inline styles (CSS from the page doesn't apply when SVG loads via data URL)
+  const inlineCSS = `
+    text { font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; }
+    .bar-imdb { fill: #f5c518; }
+    .bar-rt { fill: #e23636; }
+    .avg-line { stroke-dasharray: 4,3; stroke-width: 1.5; }
+    .center-line { stroke: #3a3a40; stroke-width: 1; }
+    .gridline { stroke: #1f1f25; stroke-dasharray: 2,2; }
+    .axis text { fill: #888; font-size: 11px; }
+    .axis path, .axis line { stroke: #2a2a30; }
+    .axis .domain { stroke: #3a3a40; }
+  `;
+
+  // Serialize the chart and convert CSS variables to hex
+  let chartXML = new XMLSerializer().serializeToString(svg);
+  chartXML = chartXML
+    .replace(/var\(--gold\)/g, '#f5c518')
+    .replace(/var\(--red\)/g, '#e23636')
+    .replace(/var\(--muted\)/g, '#888888')
+    .replace(/var\(--text\)/g, '#e6e6e6')
+    .replace(/var\(--grey\)/g, '#5a5a60')
+    .replace(/var\(--bg\)/g, '#0a0a0a')
+    .replace(/var\(--panel\)/g, '#16161a')
+    .replace(/var\(--border\)/g, '#2a2a30');
+  const chartInner = chartXML.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+
+  // Build the export SVG with header bar + footer credit
+  const exportSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="${newW}" height="${newH}" viewBox="0 0 ${newW} ${newH}">
+    <style>${inlineCSS}</style>
+    <rect width="${newW}" height="${newH}" fill="#0a0a0a"/>
+    <text x="${newW/2}" y="34" text-anchor="middle" fill="#f5c518" font-size="22" font-weight="700" font-family="Arial, sans-serif">${xmlEscape(titleText)}</text>
+    <text x="${newW/2}" y="58" text-anchor="middle" fill="#bbbbbb" font-size="12" font-family="Arial, sans-serif">${xmlEscape(summaryText)}</text>
+    <text x="${newW/2}" y="78" text-anchor="middle" fill="#666666" font-size="10" font-family="Arial, sans-serif" font-style="italic">Top 200 Blockbusters 2015-2026 · Audience (IMDB ×10) vs Critics (RT %)</text>
+    <line x1="${padding}" x2="${newW - padding}" y1="${headerH - 4}" y2="${headerH - 4}" stroke="#2a2a30" stroke-width="1"/>
+    <g transform="translate(${padding}, ${headerH})">${chartInner}</g>
+    <text x="${padding}" y="${newH - 8}" fill="#555" font-size="9" font-family="Arial, sans-serif" font-style="italic">Data manually compiled from BoxOfficeMojo, The-Numbers, IMDb, Rotten Tomatoes</text>
+    <text x="${newW - padding}" y="${newH - 8}" text-anchor="end" fill="#555" font-size="9" font-family="Arial, sans-serif">${new Date().toISOString().slice(0,10)}</text>
+  </svg>`;
+
+  // Render SVG → canvas → PNG download
+  const blob = new Blob([exportSVG], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+
+  img.onload = function() {
+    const scale = 2; // 2× resolution for crisp output
+    const canvas = document.createElement('canvas');
+    canvas.width = newW * scale;
+    canvas.height = newH * scale;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.scale(scale, scale);
+    ctx.drawImage(img, 0, 0);
+
+    canvas.toBlob(function(pngBlob) {
+      const downloadUrl = URL.createObjectURL(pngBlob);
+      const a = document.createElement('a');
+      a.href = downloadUrl;
+      const fnameSafe = parts.length === 0 ? 'AllMovies' : parts.join('_').replace(/[^a-zA-Z0-9_-]/g, '');
+      a.download = `Top200_${fnameSafe}_top${topN === '999' ? 'all' : topN}.png`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(downloadUrl);
+      URL.revokeObjectURL(url);
+    }, 'image/png');
+  };
+
+  img.onerror = function() {
+    URL.revokeObjectURL(url);
+    alert('Export failed — try again, or check the browser console.');
+  };
+
+  img.src = url;
+}
+
+// ============ INIT & EVENTS ============
+drawScatter();
+drawDiverging();
+
+["filter-gender", "filter-ethnicity", "filter-genre", "filter-top"].forEach(id => {
+  document.getElementById(id).addEventListener("change", drawDiverging);
+});
+
+document.getElementById("export-btn").addEventListener("click", exportDivergingPNG);
+
+window.addEventListener("resize", () => {
+  drawScatter();
+  drawDiverging();
+});
+</script>
+</body>
+</html>
